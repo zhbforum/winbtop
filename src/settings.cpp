@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <codecvt> 
+#include <codecvt>
 #include <locale>
 
 static std::filesystem::path SettingsPath()

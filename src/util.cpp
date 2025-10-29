@@ -5,7 +5,7 @@
 #include <io.h>
 #include <fcntl.h>
 #include <cwchar>
-#include <cstring> 
+#include <cstring>
 
 std::wstring RST() { return L"\x1b[0m"; }
 

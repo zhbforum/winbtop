@@ -13,8 +13,8 @@ struct Layout
 
 struct TableMetrics
 {
-    int tableTop; 
-    int pageRows; 
+    int tableTop;
+    int pageRows;
 };
 
 Layout ComputeLayout();
