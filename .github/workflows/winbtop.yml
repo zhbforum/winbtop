@@ -69,9 +69,7 @@ jobs:
             cmake --build build --config $env:BUILD_TYPE `
               -- /m `
               /p:UseMultiToolTask=true `
-              /p:CLToolExe=cl.exe `
-              /p:CLToolPath="" `
-              $diagnostics
+              /p:CL_AdditionalOptions="/diagnostics:column"
 
             $exe = Get-ChildItem -Path build -Recurse -Filter "winbtop.exe" |
               Where-Object { $_.FullName -match "\\$env:BUILD_TYPE\\" } |
@@ -127,7 +125,7 @@ jobs:
           }
 
       - name: Package artifact (zip)
-        if: always()
+        if: success()
         shell: pwsh
         run: |
           $outDir = "dist_${env:BUILD_TYPE}"
@@ -146,6 +144,7 @@ jobs:
             -DestinationPath $zip -CompressionLevel Optimal
 
       - name: Upload artifact (zip)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: winbtop-${{ env.GIT_DESCRIBE }}-${{ matrix.build_type }}
