@@ -1,0 +1,10 @@
+extends: default
+
+rules:
+  document-start: disable
+  truthy: disable
+  line-length:
+    max: 200
+    allow-non-breakable-words: true
+  new-lines:
+    type: unix

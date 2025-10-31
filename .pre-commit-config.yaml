@@ -1,0 +1,40 @@
+exclude: ^(themes/|build/|dist_)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        name: yamllint (with project config)
+        files: ^(\.github/workflows/|.*\.ya?ml)$
+        args: ["-c", ".yamllint", "."]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.8
+    hooks:
+      - id: actionlint
+        name: Lint GitHub Actions workflows
+        files: ^\.github/workflows/
+
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: actionlint-on-pre-push
+        name: Run actionlint on pre-push
+        entry: actionlint
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

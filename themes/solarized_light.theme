@@ -22,7 +22,7 @@ theme[title]="#002b36"
 theme[hi_fg]="#b58900"
 
 # Background color of selected items
-theme[selected_bg]="#eee8d5" 
+theme[selected_bg]="#eee8d5"
 
 # Foreground color of selected items
 theme[selected_fg]="#b58900"
