@@ -35,13 +35,21 @@ jobs:
 
     env:
       BUILD_TYPE: ${{ matrix.build_type }}
-      GIT_DESCRIBE: ${{ github.ref_name }}-${{ github.run_number }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Compute safe artifact name
+        id: meta
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref_name }}"
+          $safeRef = ($ref -replace '[^\w\.-]+','-')
+          $name = "$safeRef-${{ github.run_number }}"
+          "name=$name" >> $env:GITHUB_OUTPUT
 
       - name: Toolchain info
         shell: pwsh
@@ -51,7 +59,6 @@ jobs:
           & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" `
             -all -prerelease -products * -format json | Out-String | Write-Host
 
-      # Build Process
       - name: Build (CMake if present, otherwise cl)
         shell: pwsh
         run: |
@@ -139,16 +146,18 @@ jobs:
             Copy-Item ".\README.md" $outDir -Force
           }
 
-          $zip = "winbtop-${{ env.GIT_DESCRIBE }}-${env:BUILD_TYPE}.zip"
-          Compress-Archive -Path "$outDir\*" `
-            -DestinationPath $zip -CompressionLevel Optimal
+          $zipName = "winbtop-${{ steps.meta.outputs.name }}-${env:BUILD_TYPE}.zip"
+          $zipPath = Join-Path $PWD $zipName
+
+          Compress-Archive -Path (Join-Path $outDir '*') `
+            -DestinationPath $zipPath -CompressionLevel Optimal
 
       - name: Upload artifact (zip)
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: winbtop-${{ env.GIT_DESCRIBE }}-${{ matrix.build_type }}
-          path: winbtop-${{ env.GIT_DESCRIBE }}-${{ matrix.build_type }}.zip
+          name: winbtop-${{ steps.meta.outputs.name }}-${{ matrix.build_type }}
+          path: winbtop-${{ steps.meta.outputs.name }}-${{ matrix.build_type }}.zip
           if-no-files-found: error
           retention-days: 10
           compression-level: 9
