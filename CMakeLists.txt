@@ -15,8 +15,8 @@ add_executable(winbtop
   ${SRC_DIR}/pdh_metrics.cpp
   ${SRC_DIR}/sampler.cpp
   ${SRC_DIR}/theme.cpp
-  ${SRC_DIR}/metrics_process.cpp 
-  ${SRC_DIR}/settings.cpp   
+  ${SRC_DIR}/metrics_process.cpp
+  ${SRC_DIR}/settings.cpp
 )
 
 add_custom_command(TARGET winbtop POST_BUILD
@@ -55,5 +55,5 @@ target_link_libraries(winbtop PRIVATE
   psapi
   pdh
   Shlwapi
-  ntdll                 
+  ntdll
 )

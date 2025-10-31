@@ -1,0 +1,4 @@
+*.yml  text eol=lf
+*.yaml text eol=lf
+.yamllint text eol=lf
+.pre-commit-config.yaml text eol=lf

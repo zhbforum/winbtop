@@ -2,58 +2,174 @@ name: Winbtop CI (Windows)
 
 on:
   push:
-    branches: [ "*" ]
+    branches: ["*"]
+    paths:
+      - "src/**"
+      - "themes/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/**"
+      - "README.md"
   pull_request:
-    branches: [ "*" ]
+    branches: ["*"]
+    paths:
+      - "src/**"
+      - "themes/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/**"
+
+concurrency:
+  group: winbtop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+
     env:
-      BUILD_TYPE: Release
+      BUILD_TYPE: ${{ matrix.build_type }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Build Process
+      - name: Compute safe artifact name
+        id: meta
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref_name }}"
+          $safeRef = ($ref -replace '[^\w\.-]+','-')
+          $name = "$safeRef-${{ github.run_number }}"
+          "name=$name" >> $env:GITHUB_OUTPUT
+
+      - name: Toolchain info
+        shell: pwsh
+        run: |
+          Write-Host "Runner: $env:ImageOS"
+          Write-Host "VSWhere:"
+          & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -all -prerelease -products * -format json | Out-String | Write-Host
+
       - name: Build (CMake if present, otherwise cl)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $diagnostics = "/diagnostics:column"
 
           if (Test-Path -Path "CMakeLists.txt") {
             Write-Host "Building with CMake..."
             New-Item -ItemType Directory -Force -Path build | Out-Null
-            cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE
-            cmake --build build --config $env:BUILD_TYPE -- /m
-            $exe = Get-ChildItem -Path build -Recurse -Filter "*.exe" | Select-Object -First 1
+
+            cmake -S . -B build `
+              -G "Visual Studio 17 2022" -A x64 `
+              -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE
+
+            cmake --build build --config $env:BUILD_TYPE `
+              -- /m `
+              /p:UseMultiToolTask=true `
+              /p:CL_AdditionalOptions="/diagnostics:column"
+
+            $exe = Get-ChildItem -Path build -Recurse -Filter "winbtop.exe" |
+              Where-Object { $_.FullName -match "\\$env:BUILD_TYPE\\" } |
+              Select-Object -First 1
+
+            if (-not $exe) {
+              $exe = Get-ChildItem -Path build -Recurse -Filter "winbtop.exe" |
+                Select-Object -First 1
+            }
             if (-not $exe) { throw "No exe produced by CMake build" }
+
             Copy-Item $exe.FullName -Destination "$PWD\winbtop.exe" -Force
+
+            if (Test-Path -Path ".\themes") {
+              Write-Host "Themes found at repo root."
+            } elseif (Test-Path -Path "build\${env:BUILD_TYPE}\themes") {
+              Copy-Item -Recurse "build\${env:BUILD_TYPE}\themes" ".\themes"
+            } elseif (Test-Path -Path "build\themes") {
+              Copy-Item -Recurse "build\themes" ".\themes"
+            }
           }
           else {
             Write-Host "Building with MSVC cl (direct compile)..."
-            $cpps = Get-ChildItem -Path src -Recurse -Filter *.cpp | % { $_.FullName }
+
+            $cpps = Get-ChildItem -Path src -Recurse -Filter *.cpp |
+              ForEach-Object { $_.FullName }
+
             if (-not $cpps) { throw "No .cpp files found under src/" }
 
             $clArgs = @(
-              "/nologo", "/W4", "/EHsc", "/std:c++17", "/Zc:__cplusplus",
+              "/nologo", "/W4", "/WX", "/EHsc",
+              "/std:c++20", "/Zc:__cplusplus", "/utf-8",
               "/DUNICODE", "/D_UNICODE",
+              "/DNOMINMAX", "/DWIN32_LEAN_AND_MEAN",
+              $diagnostics,
               "/Fe:winbtop.exe"
             ) + $cpps + @(
-              "psapi.lib", "advapi32.lib", "pdh.lib", "shlwapi.lib"
+              "psapi.lib", "advapi32.lib", "pdh.lib",
+              "shlwapi.lib", "user32.lib", "ntdll.lib"
             )
 
             cl $clArgs
-            if ($LASTEXITCODE -ne 0) { throw "cl build failed with exit code $LASTEXITCODE" }
-            if (-not (Test-Path -Path ".\winbtop.exe")) { throw "winbtop.exe not found after cl build" }
+            if ($LASTEXITCODE -ne 0) {
+              throw "cl build failed with exit code $LASTEXITCODE"
+            }
+            if (-not (Test-Path -Path ".\winbtop.exe")) {
+              throw "winbtop.exe not found after cl build"
+            }
+
+            if (Test-Path -Path ".\themes") {
+              Write-Host "Themes present."
+            }
           }
 
-      # Some Artifacts
-      - name: Upload artifact (winbtop.exe)
+      - name: Package artifact (zip)
+        if: success()
+        shell: pwsh
+        run: |
+          $outDir = "dist_${env:BUILD_TYPE}"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          Copy-Item ".\winbtop.exe" $outDir -Force
+          if (Test-Path -Path ".\themes") {
+            Copy-Item -Recurse ".\themes" $outDir -Force
+          }
+          if (Test-Path -Path ".\README.md") {
+            Copy-Item ".\README.md" $outDir -Force
+          }
+
+          $zipName = "winbtop-${{ steps.meta.outputs.name }}-${env:BUILD_TYPE}.zip"
+          $zipPath = Join-Path $PWD $zipName
+
+          Compress-Archive -Path (Join-Path $outDir '*') `
+            -DestinationPath $zipPath -CompressionLevel Optimal
+
+      - name: Upload artifact (zip)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: winbtop-exe
-          path: winbtop.exe
+          name: winbtop-${{ steps.meta.outputs.name }}-${{ matrix.build_type }}
+          path: winbtop-${{ steps.meta.outputs.name }}-${{ matrix.build_type }}.zip
           if-no-files-found: error
+          retention-days: 10
+          compression-level: 9
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.build_type }}
+          path: |
+            build/**/CMakeFiles/CMakeOutput.log
+            build/**/CMakeFiles/CMakeError.log
+            **/*.log
+          if-no-files-found: ignore
+          retention-days: 10
