@@ -23,18 +23,10 @@ repos:
       - id: actionlint
         name: Lint GitHub Actions workflows
         files: ^\.github/workflows/
+        stages: [pre-commit, pre-push]
 
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
     hooks:
       - id: gitlint
         stages: [commit-msg]
-
-  - repo: local
-    hooks:
-      - id: actionlint-on-pre-push
-        name: Run actionlint on pre-push
-        entry: actionlint
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
